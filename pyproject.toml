@@ -1,0 +1,23 @@
+[tool.poetry]
+  name        = "cloudsql-eventarc"
+  version     = "0.1.0"
+  description = ""
+  authors     = ["Chris Tippett <git@christippett.dev>"]
+
+  [tool.poetry.dependencies]
+    python              = "^3.9"
+    functions-framework = "^2.2.1"
+    cloudevents         = "^1.2.0"
+    devtools            = "^0.6.1"
+  pydantic = "^1.8.2"
+
+  [tool.poetry.dev-dependencies]
+    pytest = "^5.2"
+
+[tool.isort]
+  profile   = "black"
+  src_paths = ["app", "tests"]
+
+[build-system]
+  requires      = ["poetry-core>=1.0.0"]
+  build-backend = "poetry.core.masonry.api"
