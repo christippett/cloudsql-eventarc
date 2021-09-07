@@ -1,0 +1,33 @@
+*.pyc
+
+# Packages
+*.egg
+!/tests/**/*.egg
+/*.egg-info
+/dist/*
+build
+_build
+.cache
+*.so
+
+# Installer logs
+pip-log.txt
+.venv
+
+# Unit test / coverage reports
+.coverage
+.tox
+.pytest_cache
+.mypy_cache
+
+# OS / editor files
+.DS_Store
+.idea/*
+.python-version
+.vscode/*
+
+# Terraform
+*.lock
+.terraform/*
+
+scratch
