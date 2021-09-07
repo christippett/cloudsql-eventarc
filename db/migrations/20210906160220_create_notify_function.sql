@@ -1,5 +1,5 @@
 -- migrate:up
-CREATE OR REPLACE FUNCTION pg2bq_notify ()
+CREATE OR REPLACE FUNCTION meta.pg2bq_notify ()
   RETURNS TRIGGER
   LANGUAGE plpgsql
   AS $$
@@ -14,10 +14,10 @@ BEGIN
   PERFORM
     pg_notify('pg2bq', json_build_object('table', TG_TABLE_NAME,
       'type', TG_OP, 'row', row_to_json(rec), 'timestamp',
-      extract(epoch FROM now())));
+      extract(epoch FROM now()))::text);
   RETURN NEW;
 END
 $$;
 
 -- migrate:down
-DROP FUNCTION IF EXISTS pg2bq_notify CASCADE;
+DROP FUNCTION IF EXISTS meta.pg2bq_notify CASCADE;

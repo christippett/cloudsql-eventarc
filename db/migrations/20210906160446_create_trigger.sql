@@ -1,5 +1,7 @@
 -- migrate:up
-DO $$
+CREATE OR REPLACE PROCEDURE meta.create_table_event_triggers ()
+LANGUAGE plpgsql
+AS $$
 DECLARE
   r RECORD;
 BEGIN
@@ -9,16 +11,23 @@ BEGIN
     table_name,
     op
   FROM
-    information_schema.tables
+    information_schema.tables t
   CROSS JOIN unnest(ARRAY['INSERT', 'UPDATE', 'DELETE']) op
 WHERE
   table_type = 'BASE TABLE'
-    AND table_schema NOT LIKE 'pg%'
-    AND table_schema NOT IN ('meta', 'information_schema')
-    LOOP
-      EXECUTE format('CREATE TRIGGER %s AFTER %s ON %s FOR EACH ROW EXECUTE PROCEDURE pg2bq_notify();', r.table_name || '_notify_' || lower(r.op),
-	r.op, r.table_schema || '.' || r.table_name);
-    END LOOP;
+    AND table_schema = 'public'
+    AND NOT EXISTS (
+      SELECT
+        1
+      FROM
+        information_schema.triggers
+      WHERE
+        table_name = t."table_name"
+        AND table_schema = 'public')
+      LOOP
+	EXECUTE format('CREATE TRIGGER %s AFTER %s ON %s FOR EACH ROW EXECUTE PROCEDURE meta.pg2bq_notify();', r.table_name || '_notify_' || lower(r.op),
+	  r.op, r.table_schema || '.' || r.table_name);
+      END LOOP;
 END
 $$;
 
