@@ -1,0 +1,9 @@
+-- migrate:up
+CREATE EXTENSION IF NOT EXISTS pgaudit;
+
+CREATE SCHEMA IF NOT EXISTS meta;
+
+-- migrate:down
+DROP EXTENSION IF EXISTS pgaudit;
+
+DROP SCHEMA IF EXISTS meta;
