@@ -56,18 +56,40 @@ module "cloudsql" {
 }
 
 locals {
-  cloudsql_connection_name = module.cloudsql.instance_connection_name
   db = {
-    public_ip  = module.cloudsql.instance_first_ip_address
-    private_ip = module.cloudsql.private_ip_address
-    socket     = "/cloudsql/${local.cloudsql_connection_name}/.s.PGSQL.5432"
-
-    host = "/cloudsql/${local.cloudsql_connection_name}"
-    name = var.db_name
-    user = var.db_user
-    pass = coalesce(var.db_pass, module.cloudsql.generated_user_password)
+    # socket     = "/cloudsql/${module.cloudsql.instance_connection_name}/.s.PGSQL.5432"
+    socket              = "/cloudsql/${module.cloudsql.instance_connection_name}"
+    public_ip           = module.cloudsql.instance_first_ip_address
+    private_ip          = module.cloudsql.private_ip_address
+    cloudsql_connection = module.cloudsql.instance_connection_name
+    name                = var.db_name
+    user                = var.db_user
+    pass                = coalesce(var.db_pass, module.cloudsql.generated_user_password)
   }
 }
+
+resource "google_secret_manager_secret" "cloudsql_credentials" {
+  secret_id = "${var.name}-cloudsql"
+
+  replication {
+    automatic = true
+  }
+}
+
+resource "google_secret_manager_secret_version" "cloudsql_credentials" {
+  secret = google_secret_manager_secret.cloudsql_credentials.id
+
+  secret_data = jsonencode(local.db)
+}
+
+resource "google_secret_manager_secret_iam_member" "cloudsql_credentials" {
+  provider = google-beta
+
+  secret_id = google_secret_manager_secret.cloudsql_credentials.id
+  role      = "roles/secretmanager.secretAccessor"
+  member    = "serviceAccount:${data.google_compute_default_service_account.default.email}"
+}
+
 
 # BigQuery ---------------------------------------------------------------------
 
@@ -77,7 +99,7 @@ resource "google_bigquery_connection" "connection" {
   provider = google-beta
   location = var.config.region
   cloud_sql {
-    instance_id = local.cloudsql_connection_name
+    instance_id = module.cloudsql.instance_connection_name
     database    = local.db.name
     type        = "POSTGRES"
     credential {
@@ -189,6 +211,8 @@ resource "google_eventarc_trigger" "trigger" {
 }
 
 resource "google_cloud_run_service" "handler" {
+  provider = google-beta
+
   name     = "${var.name}-handler"
   location = var.config.region
 
@@ -196,6 +220,14 @@ resource "google_cloud_run_service" "handler" {
 
   metadata {
     namespace = var.config.project
+    annotations = {
+      "run.googleapis.com/cloudsql-instances"    = module.cloudsql.instance_connection_name
+      "run.googleapis.com/client-name"           = "terraform"
+      "run.googleapis.com/launch-stage"          = "BETA"
+      "run.googleapis.com/ingress"               = "all"
+      "run.googleapis.com/execution-environment" = "gen1"
+      "autoscaling.knative.dev/maxScale"         = "3"
+    }
   }
 
   traffic {
@@ -207,15 +239,23 @@ resource "google_cloud_run_service" "handler" {
     spec {
       containers {
         image = "gcr.io/${var.config.project}/cloudsql-eventarc:latest"
+        volume_mounts {
+          name       = "secret-d0400520-c354-4c7b-ae32-cc5aa266f7a3"
+          mount_path = "/secrets"
+        }
+      }
+      volumes {
+        name = "secret-d0400520-c354-4c7b-ae32-cc5aa266f7a3"
+        secret {
+          secret_name = google_secret_manager_secret.cloudsql_credentials.secret_id
+          items {
+            key  = "latest"
+            path = google_secret_manager_secret.cloudsql_credentials.secret_id
+          }
+        }
       }
       container_concurrency = 20
-    }
-    metadata {
-      annotations = {
-        "autoscaling.knative.dev/maxScale"      = "3"
-        "run.googleapis.com/cloudsql-instances" = local.cloudsql_connection_name
-        "run.googleapis.com/client-name"        = "terraform"
-      }
+      service_account_name  = data.google_compute_default_service_account.default.email
     }
   }
 }
